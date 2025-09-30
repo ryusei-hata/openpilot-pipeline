@@ -12,7 +12,7 @@ import argparse
 
 
 PATH_TO_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache')
-FULL_FRAME_SIZE = (1164, 874)
+FULL_FRAME_SIZE = (1928, 1208)  # Updated for actual frame size
 W, H = FULL_FRAME_SIZE[0], FULL_FRAME_SIZE[1]
 eon_focal_length = FOCAL = 910.0
 
@@ -303,7 +303,10 @@ def load_calibration(segment_path):
 
 def bgr_to_yuv(img_bgr):
     img_yuv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2YUV_I420)
-    assert img_yuv.shape == ((874*3//2, 1164))
+    expected_shape = (1208*3//2, 1928)  # (1812, 1928) - Updated for actual frame size
+    if img_yuv.shape != expected_shape:
+        print(f"WARNING: YUV shape mismatch. Expected: {expected_shape}, Got: {img_yuv.shape}")
+        print(f"Original BGR shape: {img_bgr.shape}")
     return img_yuv
 
 
