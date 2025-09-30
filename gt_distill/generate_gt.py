@@ -44,10 +44,16 @@ def generate_ground_truth(path_to_segment, model, force=False):
     if input_frames is None: return
 
     input_frames = input_frames.numpy()
-    recurrent_state = np.zeros((1, 512)).astype(np.float32)
-    desire = np.zeros((1, 8)).astype(np.float32)
-    tc = np.array([[0, 1]]).astype(np.float32)
-
+    
+    # v0.9.6 model inputs with correct shapes and dtype (float16)
+    desire = np.zeros((1, 100, 8)).astype(np.float16)            # desire trajectory
+    traffic_convention = np.zeros((1, 2)).astype(np.float16)     # traffic convention
+    lateral_control_params = np.zeros((1, 2)).astype(np.float16) # lateral control parameters  
+    prev_desired_curv = np.zeros((1, 100, 1)).astype(np.float16) # previous desired curvature
+    nav_features = np.zeros((1, 256)).astype(np.float16)         # navigation features
+    nav_instructions = np.zeros((1, 150)).astype(np.float16)     # navigation instructions
+    features_buffer = np.zeros((1, 99, 512)).astype(np.float16)  # features buffer
+    
     plans = []
     plans_prob = []
     lanelines = []
@@ -56,8 +62,24 @@ def generate_ground_truth(path_to_segment, model, force=False):
     road_edge_stds = []
 
     for img in input_frames:
-        img = np.expand_dims(img.astype(np.float32), axis=0)
-        outs = model.run(None, {'input_imgs': img, 'desire': desire, 'traffic_convention': tc, 'initial_state': recurrent_state})[0]
+        # Convert to float16 and correct shape [1, 12, 128, 256]
+        input_imgs = np.expand_dims(img.astype(np.float16), axis=0)
+        big_input_imgs = input_imgs.copy()
+        
+        # v0.9.6 model input format - use both old and new inputs for compatibility
+        input_dict = {
+            'input_imgs': input_imgs,
+            'big_input_imgs': big_input_imgs,
+            'desire': desire,
+            'traffic_convention': traffic_convention,
+            'lateral_control_params': lateral_control_params,
+            'prev_desired_curv': prev_desired_curv,
+            'nav_features': nav_features,
+            'nav_instructions': nav_instructions,
+            'features_buffer': features_buffer
+        }
+        
+        outs = model.run(None, input_dict)[0]
 
         results = extract_preds(outs, best_plan_only=False)[0]
 
@@ -72,8 +94,12 @@ def generate_ground_truth(path_to_segment, model, force=False):
         road_edges.append(np.stack(road_edges_t))
         road_edge_stds.append(np.stack(road_edges_std_t))
 
-        # Important to refeed the state
-        recurrent_state = outs[:, -512:]
+        # Update features buffer for next iteration (v0.9.6 model)
+        if len(outs.shape) > 1 and outs.shape[1] >= 512:
+            # Extract features from output and update buffer (should be 512 features)
+            new_features = outs[:, :512].reshape(1, 1, 512).astype(np.float16)
+            features_buffer = np.roll(features_buffer, -1, axis=1)
+            features_buffer[:, -1:, :] = new_features
 
     if not plans:
         return
@@ -111,12 +137,24 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     options = ort.SessionOptions()
-    options.intra_op_num_threads = 30
+    options.intra_op_num_threads = 1  # Reduce threads to avoid conflicts
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
-    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+    options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    
+    # Disable all optimizations for v0.9.6 compatibility
+    options.enable_cpu_mem_arena = False
+    options.enable_mem_pattern = False
+    options.enable_mem_reuse = False
 
     # CPU turns out faster than CUDA with batch size = 1
-    model = ort.InferenceSession(args.path_to_model, providers=["CPUExecutionProvider"], sess_options=options)
+    try:
+        model = ort.InferenceSession(args.path_to_model, providers=["CPUExecutionProvider"], sess_options=options)
+    except Exception as e:
+        print(f"Failed to load model with optimizations disabled: {e}")
+        # Fallback: try with minimal session options
+        options_minimal = ort.SessionOptions()
+        options_minimal.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+        model = ort.InferenceSession(args.path_to_model, providers=["CPUExecutionProvider"], sess_options=options_minimal)
 
     if os.path.exists(args.cache):
         printf('Using cached segment directories...')
