@@ -102,7 +102,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Run the original supercombo model on the dataset and save the predicted path plans.')
     parser.add_argument("--cache", default=str(Path(PATH_TO_CACHE) / 'segments.txt'), help="path to cache file that stores the paths to the segments")
-    parser.add_argument("--recordings_basedir", type=dir_path, default="/gpfs/space/projects/Bolt/comma_recordings", help="path to base directory with recordings")
+    parser.add_argument("--recordings_basedir", type=dir_path, default=str(Path.home() / 'data/media/0/realdata'), help="path to base directory with recordings")
     parser.add_argument("--openpilot_dir", type=dir_path, default=str(Path.home() / 'openpilot'), help="path to openpilot directory")
     parser.add_argument("--path_to_model", default=default_model_path, help="path to model for creating ground truths")
     parser.add_argument("--force_gt", dest='force_gt', action='store_true', help="path to model for creating ground truths")
