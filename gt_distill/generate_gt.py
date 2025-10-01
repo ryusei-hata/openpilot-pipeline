@@ -13,6 +13,7 @@ import argparse
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import extract_preds, printf, dir_path, PATH_TO_CACHE
+from extract_preds_v096 import extract_preds_v096
 from train.dataloader import load_transformed_video
 from gt_distill.parse_logs import save_segment_calib
 
@@ -81,7 +82,8 @@ def generate_ground_truth(path_to_segment, model, force=False):
         
         outs = model.run(None, input_dict)[0]
 
-        results = extract_preds(outs, best_plan_only=False)[0]
+        # results = extract_preds(outs, best_plan_only=False)[0]
+        results = extract_preds_v096(outs, best_plan_only=False)[0]
 
         (lane_lines_t, lane_lines_probs_t), (road_edges_t, road_edges_std_t), (plans_t, plans_prob_t) = results
 
