@@ -32,12 +32,12 @@ def frames_to_tensor(frames):
 
 
 def generate_ground_truth(path_to_segment, model, force=False):
-    '''Model expected to be an onnxruntime InferenceSession.'''
+    '''モデルは onnxruntime InferenceSession になることが予想されます。'''
 
     out_path = os.path.join(path_to_segment, 'gt_distill.h5')
 
     if exists(out_path) and not force:
-        print('Ground truth already exists at:', out_path)
+        print('グラウンドトゥルースはすでに存在する:', out_path)
         return
 
     input_frames, _ = load_transformed_video(path_to_segment)
@@ -72,14 +72,14 @@ def generate_ground_truth(path_to_segment, model, force=False):
         road_edges.append(np.stack(road_edges_t))
         road_edge_stds.append(np.stack(road_edges_std_t))
 
-        # Important to refeed the state
+        # 状態を回復させることが重要
         recurrent_state = outs[:, -512:]
 
     if not plans:
         return
 
     try:
-        # delete existing file
+        # 既存のファイルを削除する
         try:
             os.remove(out_path)
         except FileNotFoundError:
@@ -93,20 +93,20 @@ def generate_ground_truth(path_to_segment, model, force=False):
             h5file_object.create_dataset("road_edges", data=np.stack(road_edges))
             h5file_object.create_dataset("road_edge_stds", data=np.stack(road_edge_stds))
     except Exception as e:
-        print(f'Couldn\'t save the ground truths at {path_to_segment}:', e)
+        print(f'グラウンドトゥルースを {path_to_segment} に保存できませんでした:', e)
 
 
 if __name__ == '__main__':
     parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     default_model_path = os.path.join(parent_dir, 'common/models/supercombo.onnx')
 
-    parser = argparse.ArgumentParser(description='Run the original supercombo model on the dataset and save the predicted path plans.')
-    parser.add_argument("--cache", default=str(Path(PATH_TO_CACHE) / 'segments.txt'), help="path to cache file that stores the paths to the segments")
-    parser.add_argument("--recordings_basedir", type=dir_path, default="/gpfs/space/projects/Bolt/comma_recordings", help="path to base directory with recordings")
-    parser.add_argument("--openpilot_dir", type=dir_path, default=str(Path.home() / 'openpilot'), help="path to openpilot directory")
-    parser.add_argument("--path_to_model", default=default_model_path, help="path to model for creating ground truths")
-    parser.add_argument("--force_gt", dest='force_gt', action='store_true', help="path to model for creating ground truths")
-    parser.add_argument("--force_calib", dest='force_calib', action='store_true', help="path to model for creating ground truths")
+    parser = argparse.ArgumentParser(description='データセットに対して元のスーパーコンボ モデルを実行し、予測されたパス プランを保存します。')
+    parser.add_argument("--cache", default=str(Path(PATH_TO_CACHE) / 'segments.txt'), help="セグメントへのパスを保存するキャッシュファイルへのパス")
+    parser.add_argument("--recordings_basedir", type=dir_path, default=str(Path.home() / 'comma_recordings'), help="録音を含むベースディレクトリへのパス")
+    parser.add_argument("--openpilot_dir", type=dir_path, default=str(Path.home() / 'openpilot'), help="openpilot ディレクトリへのパス")
+    parser.add_argument("--path_to_model", default=default_model_path, help="グラウンドトゥルースを作成するためのモデルへのパス")
+    parser.add_argument("--force_gt", dest='force_gt', action='store_true', help="グラウンドトゥルースを強制的に作成する")
+    parser.add_argument("--force_calib", dest='force_calib', action='store_true', help="キャリブレーションを強制的に作成する")
     parser.set_defaults(force_gt=False, force_calib=False)
     args = parser.parse_args()
 
@@ -115,15 +115,16 @@ if __name__ == '__main__':
     options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
     options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
 
-    # CPU turns out faster than CUDA with batch size = 1
-    model = ort.InferenceSession(args.path_to_model, providers=["CPUExecutionProvider"], sess_options=options)
+    # バッチサイズ = 1 の場合、CPU は CUDA よりも高速であることが判明
+    # model = ort.InferenceSession(args.path_to_model, providers=["CPUExecutionProvider"], sess_options=options)
+    model = ort.InferenceSession(args.path_to_model, providers=["CUDAExecutionProvider", "CPUExecutionProvider"], sess_options=options)
 
     if os.path.exists(args.cache):
-        printf('Using cached segment directories...')
+        printf('キャッシュされたセグメント ディレクトリを使用しています...')
         with open(args.cache, 'r') as f:
             segments = [line.strip() for line in f.readlines()]
     else:
-        printf('Finding segment directories...')
+        printf('セグメント ディレクトリを検索しています...')
         os.makedirs(PATH_TO_CACHE, exist_ok=True)
         with open(args.cache, 'a+') as f:
             pbar = tqdm()
@@ -135,10 +136,10 @@ if __name__ == '__main__':
 
                 f.write(dir_path + '\n')
         
-    printf('Generating ground truths...')
+    printf('グラウンドトゥルースを生成しています...')
     for dir_path in tqdm(segments):
         printf('dir_path:', dir_path)
-        generate_ground_truth(dir_path, model, force=args.force_gt)
-        save_segment_calib(dir_path, args.openpilot_dir, force=args.force_calib)
+        generate_ground_truth(dir_path, model, force=args.force_gt)  # ONNXモデルを使用してセグメントの地上真値を生成
+        save_segment_calib(dir_path, args.openpilot_dir, force=args.force_calib)  # セグメントのカメラキャリブレーション情報を抽出・保存
 
         printf()

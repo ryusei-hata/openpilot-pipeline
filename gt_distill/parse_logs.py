@@ -39,23 +39,24 @@ def rotationMatrixToEulerAngles(R) :
 
 
 def parse_logs(path_segment, path_to_openpilot):
-    """
-    Extract extrinsic matrix and rpy values from raw logs.
-    """
+    """生のログから外部マトリックスと rpy 値を抽出します。"""
+
     sys.path.append(path_to_openpilot)
-    frames_per_segment = 1200 # just for completeness; only 1190 are used for training
-    
+    frames_per_segment = 1200  # 完全性のため、トレーニングには1190のみが使用されます
     try:
         from tools.lib.logreader import LogReader
 
-        raw_log = os.path.join(path_segment, 'raw_log.bz2')
-        r_log = os.path.join(path_segment, 'rlog.bz2')
+        raw_log = os.path.join(path_segment, 'raw_log')
+        r_log = os.path.join(path_segment, 'rlog')
+        # raw_log = os.path.join(path_segment, 'raw_log.bz2')
+        # r_log = os.path.join(path_segment, 'rlog.bz2')
         if os.path.exists(raw_log):
             log_file = raw_log
         elif os.path.exists(r_log):
             log_file = r_log
         else:
-            raise FileNotFoundError('Could not find raw_log.bz2 or rlog.bz2 in {}'.format(path_segment))
+            raise FileNotFoundError('Could not find "raw_log" or "rlog" in {}'.format(path_segment))
+            # raise FileNotFoundError('Could not find raw_log.bz2 or rlog.bz2 in {}'.format(path_segment))
 
         msgs = LogReader(log_file)
         live_calibration_params = [m.liveCalibration for m in msgs if m.which() == 'liveCalibration']
@@ -116,7 +117,7 @@ def save_segment_calib(segment_path, openpilot_dir, force=False):
     out_path = os.path.join(segment_path, 'calib.h5')
 
     if os.path.exists(out_path) and not force:
-        print('Calibration already exists at:', out_path)
+        print('キャリブレーションはすでに存在する:', out_path)
         return
 
     rpy_Calib, extrinsic_matrix = parse_logs(segment_path, openpilot_dir)
@@ -127,6 +128,7 @@ def save_segment_calib(segment_path, openpilot_dir, force=False):
     with h5py.File(os.path.join(segment_path, "calib.h5"), 'w') as h5file_object:
         h5file_object.create_dataset("rpy", data=rpy_Calib)
         h5file_object.create_dataset("ext_matrix", data=extrinsic_matrix) 
+
 
 if __name__ == '__main__':
     # should be used in generate_gt.py.
