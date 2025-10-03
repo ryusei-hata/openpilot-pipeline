@@ -17,16 +17,35 @@ def load_trainable_model(path_to_supercombo, trainable_layers=[]):
     onnx_model = onnx.load(path_to_supercombo)
     model = ConvertModel(onnx_model, experimental=True)  # pretrained_model
 
-    # enable batch_size > 1 for onnx2pytorch
-    model.Constant_1047.constant[0] = -1
-    model.Constant_1049.constant[0] = -1
-    model.Constant_1051.constant[0] = -1
-    model.Constant_1053.constant[0] = -1
-    model.Constant_1057.constant[0] = -1
-    model.Constant_1059.constant[0] = -1
+    # enable batch_size > 1 for onnx2pytorch - dynamically find and update batch size constants
+    attention_constants = [
+        'Constant_/_attention/Constant_1_output_0',
+        'Constant_/_attention/Constant_2_output_0', 
+        'Constant_/_attention/Constant_3_output_0',
+        'Constant_/_attention/Constant_5_output_0'
+    ]
+    
+    for const_name in attention_constants:
+        try:
+            const_layer = getattr(model, const_name)
+            if hasattr(const_layer, 'constant') and len(const_layer.constant) > 0:
+                const_layer.constant[0] = -1
+                print(f"Updated batch size for {const_name}")
+        except AttributeError:
+            print(f"Warning: {const_name} not found in model")
+            continue
 
     # ensure immutability https://github.com/ToriML/onnx2pytorch/pull/38
-    model.Elu_907.inplace = False
+    # dynamically find ELU layers
+    elu_found = False
+    for name, module in model.named_modules():
+        if 'Elu' in str(type(module)) and hasattr(module, 'inplace'):
+            module.inplace = False
+            print(f"Set inplace=False for ELU layer: {name}")
+            elu_found = True
+    
+    if not elu_found:
+        print("Warning: No ELU layers found to set inplace=False")
 
     # reinitialize trainable layers
     for layer_name, layer in model.named_children():

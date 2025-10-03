@@ -236,7 +236,9 @@ class CommaDataset(IterableDataset):
 
                 segment_finished = sequence_idx == n_seqs-1
 
-                yuv_frame_seq = np.zeros((self.seq_len + 1, 1311, 1164), dtype=np.uint8)
+                # Use dynamic frame size based on actual yuv_frame2 dimensions
+                frame_height, frame_width = yuv_frame2.shape
+                yuv_frame_seq = np.zeros((self.seq_len + 1, frame_height, frame_width), dtype=np.uint8)
                 yuv_frame_seq[0] = yuv_frame2
 
                 # start iteration from 1 because we already read 1 frame before
@@ -323,7 +325,7 @@ class CommaDataset(IterableDataset):
                         video_files = os.listdir(segment_dir)
                         video_files = [file for file in video_files if file in video_filenames]
 
-                        found_one_video = 0 <= len(video_files) <= 1
+                        found_one_video = len(video_files) == 1
 
                         if found_one_video:
                             with open(path_to_videos_cache, 'a') as video_paths_f:

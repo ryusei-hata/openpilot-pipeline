@@ -682,8 +682,8 @@ if __name__ == "__main__":
 
     # wandb init
     run = wandb.init(
-        entity=os.environ['WANDB_ENTITY'],
-        project=os.environ['WANDB_PROJECT'],
+        entity=os.environ.get('WANDB_ENTITY', 'openpilot-team'),
+        project=os.environ.get('WANDB_PROJECT', 'openpilot-pipeline'),
         name=train_run_name,
         mode='offline' if args.no_wandb else 'online',
     )
@@ -769,7 +769,6 @@ if __name__ == "__main__":
         factor=lrs_factor,
         patience=lrs_patience,
         threshold=lrs_thresh,
-        verbose=True,
         min_lr=lrs_min,
         cooldown=lrs_cd,
     )
